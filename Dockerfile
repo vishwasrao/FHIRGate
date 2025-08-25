@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 RUN apk update && apk upgrade --no-cache
 COPY . .
@@ -7,6 +7,7 @@ RUN go mod tidy
 RUN go build -o fhirgate-plugin main.go
 
 FROM kong:3.9.1
+ENV REGISTRY_URL=http://mock-upstream
 USER root
 RUN mkdir -p /kong/go-plugins
 COPY --from=builder /app/fhirgate-plugin /kong/go-plugins/fhirgate-plugin
@@ -22,5 +23,5 @@ USER kong
 
 # Pluginserver config
 ENV KONG_PLUGINSERVER_NAMES=fhirgate-plugin
-ENV KONG_PLUGINSERVER_FHIRGATE_PLUGIN_START_CMD=/kong/go-plugins/fhirgate-plugin
+ENV KONG_PLUGINSERVER_FHIRGATE_PLUGIN_START_CMD="/kong/go-plugins/fhirgate-plugin -registry-url http://mock-upstream"
 ENV KONG_PLUGINSERVER_FHIRGATE_PLUGIN_QUERY_CMD="/kong/go-plugins/fhirgate-plugin -dump"

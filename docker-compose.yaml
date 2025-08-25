@@ -1,0 +1,30 @@
+
+
+services:
+  mock-upstream:
+    image: kennethreitz/httpbin
+    container_name: mock-upstream
+
+  kong:
+    build:
+      context: .
+      dockerfile: Dockerfile # Build the image with the plugin embedded
+    container_name: kong
+    environment:
+      KONG_DATABASE: "off" # Run Kong in DB-less mode
+      KONG_DECLARATIVE_CONFIG: "/kong.yaml" # Point to the kong.yaml copied in Dockerfile
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+      KONG_LICENSE_DATA: "" # Replace with your Kong license data if needed
+      REGISTRY_URL: http://mock-upstream
+    ports:
+      - "8000:8000" # Proxy HTTP
+      - "8443:8443" # Proxy HTTPS
+      - "8002:8001" # Admin HTTP (changed from 8001 to 8002 to avoid conflict)
+      - "8444:8444" # Admin HTTPS
+    depends_on:
+      - mock-upstream # Depend on your mock upstream service
