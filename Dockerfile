@@ -7,7 +7,6 @@ RUN go mod tidy
 RUN go build -o fhirgate-plugin main.go
 
 FROM kong:3.9.1
-ENV REGISTRY_URL=http://mock-upstream
 USER root
 RUN mkdir -p /kong/go-plugins
 COPY --from=builder /app/fhirgate-plugin /kong/go-plugins/fhirgate-plugin
@@ -18,7 +17,7 @@ COPY kong.yaml /kong.yaml
 COPY kong.yaml /kong/declarative/kong.yaml
 ENV KONG_DECLARATIVE_CONFIG=/kong.yaml
 ENV KONG_DATABASE=off
-ENV KONG_LOG_LEVEL=info
+ENV KONG_LOG_LEVEL=${KONG_LOG_LEVEL}
 USER kong
 
 # Pluginserver config

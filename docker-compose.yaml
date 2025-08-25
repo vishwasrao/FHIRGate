@@ -2,7 +2,7 @@
 
 services:
   mock-upstream:
-    image: kennethreitz/httpbin
+    image: ${MOCK_UPSTREAM_IMAGE}
     container_name: mock-upstream
 
   kong:
@@ -17,10 +17,10 @@ services:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
-      KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
-      KONG_LICENSE_DATA: "" # Replace with your Kong license data if needed
-      REGISTRY_URL: http://mock-upstream
+      KONG_ADMIN_LISTEN: ${KONG_ADMIN_LISTEN}
+      KONG_PROXY_LISTEN: ${KONG_PROXY_LISTEN}
+      KONG_LICENSE_DATA: ${KONG_LICENSE_DATA} # Replace with your Kong license data if needed
+      REGISTRY_URL: ${REGISTRY_URL} # Use REGISTRY_URL from .env
     ports:
       - "8000:8000" # Proxy HTTP
       - "8443:8443" # Proxy HTTPS
