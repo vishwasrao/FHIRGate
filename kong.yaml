@@ -1,0 +1,10 @@
+_format_version: "3.0"
+services:
+- name: cds-hooks-service
+  url: http://mock-upstream:8082/
+  routes:
+  - name: cds-hooks-route
+    paths:
+    - /cds-hooks
+plugins:
+- name: fhirgate-plugin
