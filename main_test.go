@@ -1,15 +1,16 @@
 package main
 
 import (
-	"encoding/json" // New import
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time" // New import
 
 	"github.com/Kong/go-pdk/test"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/lestrrat-go/jwx/jwa" // New import
-	"github.com/lestrrat-go/jwx/jwk" // New import
+	"github.com/lestrrat-go/jwx/jwa"
+	"github.com/lestrrat-go/jwx/jwk"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -146,4 +147,170 @@ func TestAccess_RegistryServiceError(t *testing.T) {
 	assert.Equal(t, "Registry service error", string(env.ClientRes.Body))
 
 	mockRegistry.Close() // Close the server after the test
+}
+
+func TestAccess_ExpiredJWT(t *testing.T) {
+	// Define a key and its KID
+	const testKey = "test-secret-key"
+	const testKid = "test-kid"
+
+	// Create a mock JWKS server that returns a JWKS with the test key
+	mockJwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		key, err := jwk.New([]byte(testKey))
+		assert.NoError(t, err)
+		key.Set(jwk.KeyIDKey, testKid)
+		key.Set(jwk.AlgorithmKey, jwa.HS256)
+		set := jwk.NewSet()
+		set.Add(key)
+		jsonBytes, err := json.Marshal(set)
+		assert.NoError(t, err)
+		w.Write(jsonBytes)
+	}))
+	defer mockJwksServer.Close()
+
+	// Create a mock registry service
+	mockRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"clientId": "test-client", "jwks_url": "` + mockJwksServer.URL + `"}`))
+	}))
+	defer mockRegistry.Close()
+
+	// Create a JWT token with an expired 'exp' claim
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"iss": "test-issuer",
+		"jku": "test-jku",
+		"exp": time.Now().Add(-time.Hour).Unix(), // Expired one hour ago
+	})
+	token.Header["kid"] = testKid
+	signedToken, err := token.SignedString([]byte(testKey))
+	assert.NoError(t, err)
+
+	env, err := test.New(t, test.Request{
+		Method:  "GET",
+		Url:     "http://example.com",
+		Headers: map[string][]string{"Authorization": {"Bearer " + signedToken}},
+	})
+	if err != nil {
+		t.Fatalf("could not create test environment: %v", err)
+	}
+
+	config := &Config{}
+	registryURL = mockRegistry.URL
+	env.DoHttps(config)
+
+	assert.Equal(t, 401, env.ClientRes.Status)
+	assert.Equal(t, "JWT validation failed", string(env.ClientRes.Body))
+}
+
+func TestAccess_MissingIssClaim(t *testing.T) {
+	// Define a key and its KID
+	const testKey = "test-secret-key"
+	const testKid = "test-kid"
+
+	// Create a mock JWKS server that returns a JWKS with the test key
+	mockJwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		key, err := jwk.New([]byte(testKey))
+		assert.NoError(t, err)
+		key.Set(jwk.KeyIDKey, testKid)
+		key.Set(jwk.AlgorithmKey, jwa.HS256)
+		set := jwk.NewSet()
+		set.Add(key)
+		jsonBytes, err := json.Marshal(set)
+		assert.NoError(t, err)
+		w.Write(jsonBytes)
+	}))
+	defer mockJwksServer.Close()
+
+	// Create a mock registry service
+	mockRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"clientId": "test-client", "jwks_url": "` + mockJwksServer.URL + `"}`))
+	}))
+	defer mockRegistry.Close()
+
+	// Create a JWT token with a missing 'iss' claim
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		// "iss": "test-issuer", // Missing 'iss' claim
+		"jku": "test-jku",
+	})
+	token.Header["kid"] = testKid
+	signedToken, err := token.SignedString([]byte(testKey))
+	assert.NoError(t, err)
+
+	env, err := test.New(t, test.Request{
+		Method:  "GET",
+		Url:     "http://example.com",
+		Headers: map[string][]string{"Authorization": {"Bearer " + signedToken}},
+	})
+	if err != nil {
+		t.Fatalf("could not create test environment: %v", err)
+	}
+
+	config := &Config{}
+	registryURL = mockRegistry.URL
+	env.DoHttps(config)
+
+	assert.Equal(t, 401, env.ClientRes.Status)
+	assert.Equal(t, "Invalid JWT claims", string(env.ClientRes.Body))
+}
+
+func TestAccess_MissingJkuClaim(t *testing.T) {
+	// Define a key and its KID
+	const testKey = "test-secret-key"
+	const testKid = "test-kid"
+
+	// Create a mock JWKS server (not used in this test, but needed for setup)
+	mockJwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		key, err := jwk.New([]byte(testKey))
+		assert.NoError(t, err)
+		key.Set(jwk.KeyIDKey, testKid)
+		key.Set(jwk.AlgorithmKey, jwa.HS256)
+		set := jwk.NewSet()
+		set.Add(key)
+		jsonBytes, err := json.Marshal(set)
+		assert.NoError(t, err)
+		w.Write(jsonBytes)
+	}))
+	defer mockJwksServer.Close()
+
+	// Create a mock registry service (not used in this test, but needed for setup)
+	mockRegistry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"clientId": "test-client", "jwks_url": "` + mockJwksServer.URL + `"}`))
+	}))
+	defer mockRegistry.Close()
+
+	// Create a JWT token with a missing 'jku' claim
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"iss": "test-issuer",
+		// "jku": "test-jku", // Missing 'jku' claim
+	})
+	token.Header["kid"] = testKid
+	signedToken, err := token.SignedString([]byte(testKey))
+	assert.NoError(t, err)
+
+	env, err := test.New(t, test.Request{
+		Method:  "GET",
+		Url:     "http://example.com",
+		Headers: map[string][]string{"Authorization": {"Bearer " + signedToken}},
+	})
+	if err != nil {
+		t.Fatalf("could not create test environment: %v", err)
+	}
+
+	config := &Config{}
+	registryURL = mockRegistry.URL
+	env.DoHttps(config)
+
+	assert.Equal(t, 401, env.ClientRes.Status)
+	assert.Equal(t, "JWKS fetch error", string(env.ClientRes.Body))
 }

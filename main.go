@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/Kong/go-pdk"
@@ -33,6 +34,11 @@ func New() interface{} {
 
 // Access is the main handler for the FHIRGate plugin.
 // It intercepts incoming requests and performs JWT validation.
+//
+// Parameters:
+//   kong: The Kong PDK instance, providing access to Kong's API.
+// Access is the main handler for the FHIRGate plugin.
+// It intercepts incoming requests and performs JWT validation based on CDS Hooks specifications.
 //
 // Parameters:
 //   kong: The Kong PDK instance, providing access to Kong's API.
@@ -64,7 +70,33 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	}
 	issuer, _ := claims["iss"].(string)
 	jku, _ := claims["jku"].(string)
+	if jku == "" {
+		kong.Log.Err("[FHIRGate-plugin] Missing 'jku' claim in JWT")
+		kong.Response.Exit(401, []byte("JWKS fetch error"), nil)
+		return
+	}
+	if issuer == "" {
+		kong.Log.Err("[FHIRGate-plugin] Missing 'iss' claim in JWT")
+		kong.Response.Exit(401, []byte("Invalid JWT claims"), nil)
+		return
+	}
 	kong.Log.Info("[FHIRGate-plugin] Extracted iss: " + issuer + ", jku: " + jku)
+
+	// CDS Hooks Recommendation: Ensure that the iss value exists in the CDS Service's allowlist of trusted CDS Clients.
+	// This requires a configuration mechanism for the allowlist.
+	// TODO: Implement CDS Client allowlist check.
+
+	// CDS Hooks Recommendation: Ensure that the aud value matches the CDS Service endpoint currently processing the request.
+	// This requires getting the 'aud' claim from the JWT and comparing it with the current endpoint.
+	// TODO: Implement 'aud' claim validation.
+
+	// CDS Hooks Recommendation: Ensure that the tenant value exists in the CDS Service's allowlist of trusted tenants.
+	// This requires checking for a 'tenant' claim and a trusted tenant allowlist.
+	// TODO: Implement 'tenant' claim validation.
+
+	// CDS Hooks Recommendation: Ensure that the jti value doesn't exist in the short-term storage of JWTs previously processed by this CDS Service.
+	// This requires a storage mechanism (e.g., a cache or database) to prevent replay attacks.
+	// TODO: Implement 'jti' replay attack prevention.
 
 	// Call registry-service
 	regURL := registryURL + "/get?iss=" + issuer + "&jku=" + jku
@@ -89,6 +121,8 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	kong.Log.Info("[FHIRGate-plugin] Got registry-service response: clientId=" + regResp.ClientID + ", jwks_url=" + regResp.JWKSURL)
 
 	// Validate JWT signature using JWKS
+	// CDS Hooks Recommendation: CDS Services should maintain their own rotating cache of public keys for the CDS Client.
+	// TODO: Implement JWKS caching.
 	keySet, err := getJWKS(regResp.JWKSURL)
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] Failed to fetch JWKS: " + err.Error())
@@ -96,14 +130,20 @@ func (conf *Config) Access(kong *pdk.PDK) {
 		return
 	}
 	
-	_, err = jwxjwt.Parse([]byte(jwtToken), jwxjwt.WithKeySet(keySet))
+	_, err = jwxjwt.Parse([]byte(jwtToken), jwxjwt.WithKeySet(keySet), jwxjwt.WithValidate(true))
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] JWT validation failed: " + err.Error())
 		kong.Response.Exit(401, []byte("JWT validation failed"), nil)
 		return
 	}
 
+	// CDS Hooks Recommendation: Once the JWT has been deemed to be valid, the jti value should be stored in the short-term storage of processed JWTs.
+	// TODO: Store 'jti' in short-term storage.
+
 	kong.Log.Info("[FHIRGate-plugin] JWT validated successfully. Allowing request.")
+
+	// FHIR Access: CDS Services should never store, share, or log the FHIR access token (fhirAuthorization.access_token).
+	// TODO: Consider handling fhirAuthorization.access_token if applicable in future.
 }
 
 // getJWKS fetches the JSON Web Key Set (JWKS) from the provided URL.
@@ -126,7 +166,7 @@ func getJWKS(url string) (jwk.Set, error) {
 // It parses command-line arguments and starts the Kong plugin server.
 func main() {
 	var rURL string
-	flag.StringVar(&rURL, "registry-url", "http://registry-service:8081", "URL of the registry service")
+	flag.StringVar(&rURL, "registry-url", os.Getenv("DEFAULT_REGISTRY_URL"), "URL of the registry service")
 	flag.Parse()
 	registryURL = rURL // Assign to global variable
 
