@@ -3,8 +3,8 @@ services:
 - name: cds-hooks-service
   url: http://registry-service:3000
   routes:
-  - name: cds-hooks-route
+  - name: crdroute
     paths:
-    - /cds-hooks
+    - /crd
 plugins:
 - name: fhirgate-plugin
