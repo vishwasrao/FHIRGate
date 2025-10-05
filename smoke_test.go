@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// Smoke test that waits for Kong proxy to be available and hits the /cds-hooks route.
+// Smoke test that waits for Kong proxy to be available and hits the /crd route.
 func TestSmoke_KongProxy(t *testing.T) {
 	// Wait for Kong to become ready (up to 30s)
 	client := &http.Client{Timeout: 5 * time.Second}
-	url := "http://localhost:8000/cds-hooks"
+	url := "http://localhost:8000/crd"
 
 	deadline := time.Now().Add(30 * time.Second)
 	var resp *http.Response

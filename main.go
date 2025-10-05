@@ -119,15 +119,15 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	var regResp struct {
 		ClientID string `json:"clientId"`
-		JWKSURL  string `json:"jwks_url"`
+		JKU      string `json:"jku"`
 	}
 	json.Unmarshal(body, &regResp)
-	kong.Log.Info("[FHIRGate-plugin] Got registry-service response: clientId=" + regResp.ClientID + ", jwks_url=" + regResp.JWKSURL)
+	kong.Log.Info("[FHIRGate-plugin] Got registry-service response: clientId=" + regResp.ClientID + ", jku=" + regResp.JKU)
 
 	// Validate JWT signature using JWKS
 	// CDS Hooks Recommendation: CDS Services should maintain their own rotating cache of public keys for the CDS Client.
 	// TODO: Implement JWKS caching.
-	keySet, err := getJWKS(regResp.JWKSURL)
+	keySet, err := getJWKS(regResp.JKU)
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] Failed to fetch JWKS: " + err.Error())
 		kong.Response.Exit(401, []byte("Unauthorized"), nil)

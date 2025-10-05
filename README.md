@@ -134,9 +134,9 @@ services:
 - name: cds-hooks-service
   url: http://upstream-service/ # Replace with your actual FHIR upstream
   routes:
-  - name: cds-hooks-route
+  - name: crd-route
     paths:
-    - /cds-hooks
+    - /crd
 plugins:
 - name: fhirgate-plugin
 ```
@@ -199,7 +199,7 @@ To test the plugin, you can send a request to the configured route with a valid 
     Now, you can make a request to the protected endpoint with the generated JWT.
 
     ```sh
-    curl -v -H "Authorization: Bearer YOUR_GENERATED_JWT_HERE" http://localhost:8000/cds-hooks
+    curl -v -H "Authorization: Bearer YOUR_GENERATED_JWT_HERE" http://localhost:8000/crd
     ```
 
     Replace `YOUR_GENERATED_JWT_HERE` with the actual JWT you generated.
