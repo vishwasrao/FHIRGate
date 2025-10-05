@@ -1,7 +1,7 @@
 _format_version: "3.0"
 services:
 - name: cds-hooks-service
-  url: http://mock-upstream/
+  url: http://registry-service:3000
   routes:
   - name: cds-hooks-route
     paths:

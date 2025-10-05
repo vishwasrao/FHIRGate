@@ -22,5 +22,5 @@ USER kong
 
 # Pluginserver config
 ENV KONG_PLUGINSERVER_NAMES=fhirgate-plugin
-ENV KONG_PLUGINSERVER_FHIRGATE_PLUGIN_START_CMD="/kong/go-plugins/fhirgate-plugin -registry-url http://mock-upstream"
+ENV KONG_PLUGINSERVER_FHIRGATE_PLUGIN_START_CMD="/kong/go-plugins/fhirgate-plugin -registry-url http://registry-service:3000"
 ENV KONG_PLUGINSERVER_FHIRGATE_PLUGIN_QUERY_CMD="/kong/go-plugins/fhirgate-plugin -dump"

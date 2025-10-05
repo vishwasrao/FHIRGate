@@ -1,9 +1,13 @@
 
 
 services:
-  mock-upstream:
-    image: ${MOCK_UPSTREAM_IMAGE}
-    container_name: mock-upstream
+  registry-service:
+    build:
+      context: ../registry-service
+    container_name: registry-service
+    command: ["node", "dist/main"]
+    ports:
+      - "3000:3000" # Expose registry service port
 
   kong:
     build:
@@ -17,14 +21,16 @@ services:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: ${KONG_ADMIN_LISTEN}
-      KONG_PROXY_LISTEN: ${KONG_PROXY_LISTEN}
-      KONG_LICENSE_DATA: ${KONG_LICENSE_DATA} # Replace with your Kong license data if needed
-      REGISTRY_URL: ${REGISTRY_URL} # Use REGISTRY_URL from .env
+      # Provide sensible defaults so Kong doesn't inherit empty values
+      KONG_LOG_LEVEL: "info"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+      KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+      KONG_LICENSE_DATA: "" # Replace with your Kong license data if needed
+      REGISTRY_URL: http://registry-service:3000 # Pass registry URL to the plugin
     ports:
       - "8000:8000" # Proxy HTTP
       - "8443:8443" # Proxy HTTPS
       - "8002:8001" # Admin HTTP (changed from 8001 to 8002 to avoid conflict)
       - "8444:8444" # Admin HTTPS
     depends_on:
-      - mock-upstream # Depend on your mock upstream service
+      - registry-service # Depend on registry service
