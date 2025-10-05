@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -36,12 +35,15 @@ func New() interface{} {
 // It intercepts incoming requests and performs JWT validation.
 //
 // Parameters:
-//   kong: The Kong PDK instance, providing access to Kong's API.
+//
+//	kong: The Kong PDK instance, providing access to Kong's API.
+//
 // Access is the main handler for the FHIRGate plugin.
 // It intercepts incoming requests and performs JWT validation based on CDS Hooks specifications.
 //
 // Parameters:
-//   kong: The Kong PDK instance, providing access to Kong's API.
+//
+//	kong: The Kong PDK instance, providing access to Kong's API.
 func (conf *Config) Access(kong *pdk.PDK) {
 	kong.Log.Info("[FHIRGate-plugin] Access handler called")
 	kong.Log.Info("[FHIRGate-plugin] Registry URL: " + registryURL)
@@ -69,9 +71,10 @@ func (conf *Config) Access(kong *pdk.PDK) {
 		return
 	}
 	issuer, _ := claims["iss"].(string)
-	jku, _ := claims["jku"].(string)
+	// Extract 'jku' from JWT header (not payload)
+	jku, _ := token.Header["jku"].(string)
 	if jku == "" {
-		kong.Log.Err("[FHIRGate-plugin] Missing 'jku' claim in JWT")
+		kong.Log.Err("[FHIRGate-plugin] Missing 'jku' header in JWT")
 		kong.Response.Exit(401, []byte("JWKS fetch error"), nil)
 		return
 	}
@@ -80,7 +83,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 		kong.Response.Exit(401, []byte("Invalid JWT claims"), nil)
 		return
 	}
-	kong.Log.Info("[FHIRGate-plugin] Extracted iss: " + issuer + ", jku: " + jku)
+	kong.Log.Info("[FHIRGate-plugin] Extracted iss: " + issuer + ", jku(header): " + jku)
 
 	// CDS Hooks Recommendation: Ensure that the iss value exists in the CDS Service's allowlist of trusted CDS Clients.
 	// This requires a configuration mechanism for the allowlist.
@@ -98,8 +101,9 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	// This requires a storage mechanism (e.g., a cache or database) to prevent replay attacks.
 	// TODO: Implement 'jti' replay attack prevention.
 
-	// Call registry-service
-	regURL := registryURL + "/get?iss=" + issuer + "&jku=" + jku
+	// Call registry-service (use /registry endpoint)
+	regURL := registryURL + "/registry?iss=" + issuer + "&jku=" + jku
+	kong.Log.Info("[FHIRGate-plugin] Calling registry-service URL: " + regURL)
 	resp, err := http.Get(regURL)
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] Error calling registry-service: " + err.Error())
@@ -115,7 +119,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	var regResp struct {
 		ClientID string `json:"clientId"`
-		JWKSURL string `json:"jwks_url"`
+		JWKSURL  string `json:"jwks_url"`
 	}
 	json.Unmarshal(body, &regResp)
 	kong.Log.Info("[FHIRGate-plugin] Got registry-service response: clientId=" + regResp.ClientID + ", jwks_url=" + regResp.JWKSURL)
@@ -129,7 +133,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 		kong.Response.Exit(401, []byte("JWKS fetch error"), nil)
 		return
 	}
-	
+
 	_, err = jwxjwt.Parse([]byte(jwtToken), jwxjwt.WithKeySet(keySet), jwxjwt.WithValidate(true))
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] JWT validation failed: " + err.Error())
@@ -149,11 +153,13 @@ func (conf *Config) Access(kong *pdk.PDK) {
 // getJWKS fetches the JSON Web Key Set (JWKS) from the provided URL.
 //
 // Parameters:
-//   url: The URL of the JWKS endpoint.
+//
+//	url: The URL of the JWKS endpoint.
 //
 // Returns:
-//   jwk.Set: The fetched JWKS.
-//   error: An error if fetching or parsing the JWKS fails.
+//
+//	jwk.Set: The fetched JWKS.
+//	error: An error if fetching or parsing the JWKS fails.
 func getJWKS(url string) (jwk.Set, error) {
 	set, err := jwk.Fetch(context.Background(), url)
 	if err != nil {

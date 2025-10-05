@@ -36,15 +36,20 @@ The plugin is built as part of the Docker image. You don't need to build it sepa
 
 The easiest way to run FHIRGate is with Docker Compose, which can spin up Kong and the plugin together.
 
+
 1.  **Create a `docker-compose.yaml` file:**
 
     ```yaml
     version: '3.8'
 
     services:
-      mock-upstream:
-        image: kennethreitz/httpbin
-        container_name: mock-upstream
+      registry-service:
+        build:
+          context: ../registry-service
+        container_name: registry-service
+        command: ["node", "dist/main"] # Or your start command
+        ports:
+          - "3000:3000" # Expose registry service port
 
       kong:
         build:
@@ -58,26 +63,28 @@ The easiest way to run FHIRGate is with Docker Compose, which can spin up Kong a
           KONG_ADMIN_ACCESS_LOG: /dev/stdout
           KONG_PROXY_ERROR_LOG: /dev/stderr
           KONG_ADMIN_ERROR_LOG: /dev/stderr
-          KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
-          KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
+          KONG_LOG_LEVEL: "info"
+          KONG_ADMIN_LISTEN: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+          KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
           KONG_LICENSE_DATA: "" # Replace with your Kong license data if needed
-          REGISTRY_URL: http://mock-upstream # Pass registry URL to the plugin
+          REGISTRY_URL: http://registry-service:3000 # Pass registry URL to the plugin
         ports:
           - "8000:8000" # Proxy HTTP
           - "8443:8443" # Proxy HTTPS
           - "8002:8001" # Admin HTTP (changed from 8001 to 8002 to avoid conflict)
           - "8444:8444" # Admin HTTPS
         depends_on:
-          - mock-upstream # Depend on your mock upstream service
+          - registry-service # Depend on registry service
     ```
 
 2.  **Start the services:**
 
     ```sh
-    docker compose up -d --build --force-recreate
+  # Build and start services (use this exact command)
+  docker compose up -d --build --force-recreate
     ```
 
-    This will build the Kong image with the FHIRGate plugin embedded and start Kong with the plugin enabled, along with a mock upstream service.
+  This will build the Kong image with the FHIRGate plugin embedded and start Kong with the plugin enabled, along with your registry-service.
 
 ### Cleanup
 
@@ -95,6 +102,28 @@ To run the tests for the plugin, use the following command:
 go test ./...
 ```
 
+
+Note for Apple Silicon (M1/M2) users
+
+If your machine is Apple Silicon (arm64) and your registry-service image does not provide arm64, you may need to add a `platform` field to the `registry-service` service in your `docker-compose.yaml`, e.g.:
+
+```yaml
+services:
+  registry-service:
+    build:
+      context: ../registry-service
+    container_name: registry-service
+    platform: "linux/amd64"
+    # ...other config...
+```
+
+You can then start the stack with the same command shown above:
+
+```sh
+docker compose up -d --build --force-recreate
+```
+
+
 ## Configuration
 
 The plugin is configured in your `kong.yaml` file. Here's an example:
@@ -103,7 +132,7 @@ The plugin is configured in your `kong.yaml` file. Here's an example:
 _format_version: "3.0"
 services:
 - name: cds-hooks-service
-  url: http://mock-upstream/
+  url: http://upstream-service/ # Replace with your actual FHIR upstream
   routes:
   - name: cds-hooks-route
     paths:
