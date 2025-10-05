@@ -51,7 +51,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	header, err := kong.Request.GetHeader("Authorization")
 	if err != nil || !strings.HasPrefix(header, "Bearer ") {
 		kong.Log.Err("[FHIRGate-plugin] Missing or invalid Authorization header")
-		kong.Response.Exit(401, []byte("Missing or invalid Authorization header"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 	jwtToken := strings.TrimPrefix(header, "Bearer ")
@@ -61,13 +61,13 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	token, _, err := new(jwt.Parser).ParseUnverified(jwtToken, jwt.MapClaims{})
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] Failed to parse JWT: " + err.Error())
-		kong.Response.Exit(401, []byte("Invalid JWT"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		kong.Log.Err("[FHIRGate-plugin] JWT claims not found")
-		kong.Response.Exit(401, []byte("Invalid JWT claims"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 	issuer, _ := claims["iss"].(string)
@@ -75,12 +75,12 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	jku, _ := token.Header["jku"].(string)
 	if jku == "" {
 		kong.Log.Err("[FHIRGate-plugin] Missing 'jku' header in JWT")
-		kong.Response.Exit(401, []byte("JWKS fetch error"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 	if issuer == "" {
 		kong.Log.Err("[FHIRGate-plugin] Missing 'iss' claim in JWT")
-		kong.Response.Exit(401, []byte("Invalid JWT claims"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 	kong.Log.Info("[FHIRGate-plugin] Extracted iss: " + issuer + ", jku(header): " + jku)
@@ -107,7 +107,7 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	resp, err := http.Get(regURL)
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] Error calling registry-service: " + err.Error())
-		kong.Response.Exit(500, []byte("Registry service error"), nil)
+		kong.Response.Exit(500, []byte("Internal server error"), nil)
 		return
 	}
 	defer resp.Body.Close()
@@ -130,14 +130,14 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	keySet, err := getJWKS(regResp.JWKSURL)
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] Failed to fetch JWKS: " + err.Error())
-		kong.Response.Exit(401, []byte("JWKS fetch error"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 
 	_, err = jwxjwt.Parse([]byte(jwtToken), jwxjwt.WithKeySet(keySet), jwxjwt.WithValidate(true))
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] JWT validation failed: " + err.Error())
-		kong.Response.Exit(401, []byte("JWT validation failed"), nil)
+		kong.Response.Exit(401, []byte("Unauthorized"), nil)
 		return
 	}
 
