@@ -6,5 +6,6 @@ services:
   - name: crdroute
     paths:
     - /crd
+    strip_path: false
   plugins:
   - name: fhirgate-plugin

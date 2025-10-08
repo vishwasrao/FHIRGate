@@ -8,6 +8,13 @@ services:
     command: ["node", "dist/main"]
     ports:
       - "3000:3000" # Expose registry service port
+  crd-service:
+    build:
+      context: ../crd-service
+    container_name: crd-service
+    command: ["node", "dist/main"]
+    ports:
+      - "3001:3001" # Expose CRD service port
 
   kong:
     build:
@@ -34,3 +41,4 @@ services:
       - "8444:8444" # Admin HTTPS
     depends_on:
       - registry-service # Depend on registry service
+      - crd-service # Depend on CRD service
