@@ -47,6 +47,30 @@ func New() interface{} {
 func (conf *Config) Access(kong *pdk.PDK) {
 	kong.Log.Info("[FHIRGate-plugin] Access handler called")
 	kong.Log.Info("[FHIRGate-plugin] Registry URL: " + registryURL)
+
+	// Allow CORS preflight requests to pass without authentication.
+	method, _ := kong.Request.GetMethod()
+	if strings.ToUpper(method) == "OPTIONS" {
+		// Build permissive CORS response headers. Use Origin if present.
+		origin, _ := kong.Request.GetHeader("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		reqHeaders, _ := kong.Request.GetHeader("Access-Control-Request-Headers")
+		if reqHeaders == "" {
+			reqHeaders = "Authorization,Content-Type,Accept"
+		}
+		headers := map[string][]string{
+			"Access-Control-Allow-Origin":      {origin},
+			"Access-Control-Allow-Methods":     {"GET, POST, PUT, DELETE, OPTIONS"},
+			"Access-Control-Allow-Headers":     {reqHeaders},
+			"Access-Control-Allow-Credentials": {"true"},
+			"Access-Control-Max-Age":           {"600"},
+		}
+		kong.Log.Info("[FHIRGate-plugin] Responding to CORS preflight")
+		kong.Response.Exit(204, nil, headers)
+		return
+	}
 	// Extract JWT from Authorization header
 	header, err := kong.Request.GetHeader("Authorization")
 	if err != nil || !strings.HasPrefix(header, "Bearer ") {
@@ -101,8 +125,8 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	// This requires a storage mechanism (e.g., a cache or database) to prevent replay attacks.
 	// TODO: Implement 'jti' replay attack prevention.
 
-	// Call registry-service (use /registry endpoint)
-	regURL := registryURL + "/registry?iss=" + issuer + "&jku=" + jku
+	// Call registry-service (use /services endpoint)
+	regURL := registryURL + "/services?iss=" + issuer + "&jku=" + jku
 	kong.Log.Info("[FHIRGate-plugin] Calling registry-service URL: " + regURL)
 	resp, err := http.Get(regURL)
 	if err != nil {
@@ -145,6 +169,16 @@ func (conf *Config) Access(kong *pdk.PDK) {
 	// TODO: Store 'jti' in short-term storage.
 
 	kong.Log.Info("[FHIRGate-plugin] JWT validated successfully. Allowing request.")
+
+	// Add CORS response headers so browser receives them on the actual response.
+	origin, _ := kong.Request.GetHeader("Origin")
+	if origin == "" {
+		origin = "*"
+	}
+	// Allow common request headers and credentials
+	_ = kong.Response.SetHeader("Access-Control-Allow-Origin", origin)
+	_ = kong.Response.SetHeader("Access-Control-Allow-Credentials", "true")
+	_ = kong.Response.SetHeader("Access-Control-Expose-Headers", "Authorization,Content-Type")
 
 	// FHIR Access: CDS Services should never store, share, or log the FHIR access token (fhirAuthorization.access_token).
 	// TODO: Consider handling fhirAuthorization.access_token if applicable in future.

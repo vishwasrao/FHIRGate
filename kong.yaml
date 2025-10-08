@@ -1,11 +1,20 @@
 _format_version: "3.0"
 services:
+- name: discovery-service
+  url: http://registry-service:3000
+  routes:
+  - name: discoveryroute
+    paths:
+    - /services
+    strip_path: false
+  plugins:
+  - name: fhirgate-plugin
 - name: cds-hooks-service
   url: http://crd-service:3001
   routes:
   - name: crdroute
     paths:
-    - /crd
+    - /services/crd-service
     strip_path: false
   plugins:
   - name: fhirgate-plugin
