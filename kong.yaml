@@ -1,10 +1,10 @@
 _format_version: "3.0"
 services:
 - name: cds-hooks-service
-  url: http://registry-service:3000
+  url: http://crd-service:3001
   routes:
   - name: crdroute
     paths:
     - /crd
-plugins:
-- name: fhirgate-plugin
+  plugins:
+  - name: fhirgate-plugin
