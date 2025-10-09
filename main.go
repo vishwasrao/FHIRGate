@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 
+	"time"
+
 	"github.com/Kong/go-pdk"
 	"github.com/Kong/go-pdk/server"
 	jwt "github.com/golang-jwt/jwt/v5"
@@ -158,7 +160,10 @@ func (conf *Config) Access(kong *pdk.PDK) {
 		return
 	}
 
-	_, err = jwxjwt.Parse([]byte(jwtToken), jwxjwt.WithKeySet(keySet), jwxjwt.WithValidate(true))
+	// Validate the JWT with a 10-second clock skew allowance
+	// This checks signature, expiration (exp), not before (nbf), and issued at (iat) claims.
+	// Other claims like 'aud' and 'iss' should be validated separately as per recommendations above.
+	_, err = jwxjwt.Parse([]byte(jwtToken), jwxjwt.WithKeySet(keySet), jwxjwt.WithValidate(true), jwxjwt.WithAcceptableSkew(10*time.Second))
 	if err != nil {
 		kong.Log.Err("[FHIRGate-plugin] JWT validation failed: " + err.Error())
 		kong.Response.Exit(401, []byte("Unauthorized"), nil)
